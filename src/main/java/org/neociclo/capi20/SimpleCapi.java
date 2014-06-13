@@ -46,9 +46,16 @@ public class SimpleCapi implements Capi {
     }
 
     public int getNumberOfControllers() throws CapiException {
-        byte[] data = getProfile(CAPI_IMPL_CONTROLLER);
-        ChannelBuffer buf = wrappedBuffer(data, 0, WORD_SIZE);
-        return readWord(buf);
+        int controllers = 0;
+        for (int i = 1; i <= 10; i++) {
+            byte[] data = getProfile(i);
+            int controllerId = data[2];
+            if (controllerId < 1) {
+                controllers = (i - 1);
+                break;
+            }
+        }
+        return controllers;
     }
 
     public Profile simpleGetProfile(int controller) throws CapiException {
@@ -154,8 +161,9 @@ public class SimpleCapi implements Capi {
             String man = getImplManufacturer();
             String sn = getImplSerialNumber();
             CapiVersion ver = getImplVersion();
-            args = new Object[] { className, ver.getCapiMajor(), ver.getCapiMinor(), man, ver.getManufacturerMajor(),
-                    ver.getManufacturerMinor(), sn };
+            args =
+                    new Object[] { className, ver.getCapiMajor(), ver.getCapiMinor(), man,
+                            ver.getManufacturerMajor(), ver.getManufacturerMinor(), sn };
         } catch (Throwable t) {
             return className + "(capi error)";
         }
