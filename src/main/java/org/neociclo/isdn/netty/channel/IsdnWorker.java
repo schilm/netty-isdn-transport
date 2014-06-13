@@ -94,7 +94,8 @@ class IsdnWorker implements Runnable {
         assert (maxBDataBlocks >= 2 && maxBDataBlocks <= 7) : "maxBDataBlocks (must be between 2 and 7)";
         assert (maxBDataLen > 0) : "maxBDataLen";
 
-        LOGGER.trace("Capi.register() :: msgBufSize = {}, mxLogicalCon = {}, maxBDataBlocks = {}, maxBDataLen = {}",
+        LOGGER.trace(
+                "Capi.register() :: msgBufSize = {}, mxLogicalCon = {}, maxBDataBlocks = {}, maxBDataLen = {}",
                 new Object[] { messageBufferSize, maxLogicalConnection, maxBDataBlocks, maxBDataLen });
 
         int appID = channel.capi().register(messageBufferSize, maxLogicalConnection, maxBDataBlocks, maxBDataLen);
@@ -209,9 +210,9 @@ class IsdnWorker implements Runnable {
         boolean bound = channel.isBound();
 
         try {
-        	if (connected || bound) {
-        		channel.worker().release();
-        	}
+            if (connected || bound) {
+                channel.worker().release();
+            }
             if (channel.setClosed()) {
                 future.setSuccess();
                 if (connected) {
@@ -278,8 +279,8 @@ class IsdnWorker implements Runnable {
         super();
 
         if (port <= 0) {
-            throw new IllegalArgumentException(String.format("Invalid ISDN-port (appId). Port [%s] on Channel [%s].",
-                    port, channel));
+            throw new IllegalArgumentException(String.format(
+                    "Invalid ISDN-port (appId). Port [%s] on Channel [%s].", port, channel));
         }
 
         this.channel = channel;
@@ -331,12 +332,12 @@ class IsdnWorker implements Runnable {
                 LOGGER.trace("Capi.waitForSignal() :: locking... ");
                 channel.capi().waitForSignal(appID);
                 LOGGER.trace("Capi.waitForSignal() :: released!");
-                
+
                 message = getMessage();
-                
+
                 // XXX 23-apr-2013 by @rmarins
                 // perhaps the message could be null if the connection were
-                // not established due to an error in the ISDN link, then 
+                // not established due to an error in the ISDN link, then
                 // close(channel) is called at IsdnConnectionHandler(line 170).
 
             } catch (CapiException e) {
@@ -383,9 +384,25 @@ class IsdnWorker implements Runnable {
 
         CapiMessage message = buildMessage(messageBuffer, channel.getConfig());
 
-        LOGGER.trace("Capi.getMessage() :: {}", message);
+        String hexMessage = buildHexMessage(messageBuffer);
+        LOGGER.trace("Capi.getMessage() :: " + hexMessage + " {}", message);
 
         return message;
+    }
+
+    /**
+     * @param messageBuffer
+     * @return
+     */
+    private static String buildHexMessage(ChannelBuffer messageBuffer) {
+        StringBuilder builder = new StringBuilder("b(");
+        for (int i = 0; i < 5; i++) {
+            int bValue = messageBuffer.getByte(i);
+            builder.append(Integer.toHexString(bValue));
+            builder.append(" | ");
+        }
+        builder.append("...)");
+        return builder.toString();
     }
 
     public static boolean listen(IsdnServerChannel channel, ChannelFuture future) throws CapiException {
@@ -413,7 +430,8 @@ class IsdnWorker implements Runnable {
         IsdnChannelConfig config = channel.getConfig();
 
         ListenReq req = new ListenReq();
-        req.setController(new net.sourceforge.jcapi.message.parameter.Controller(channel.getController().getNumber()));
+        req.setController(new net.sourceforge.jcapi.message.parameter.Controller(channel.getController()
+                .getNumber()));
         req.setCip(config.getCompatibilityInformationProfile());
 
         return req;

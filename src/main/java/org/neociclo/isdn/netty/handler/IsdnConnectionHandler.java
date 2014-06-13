@@ -59,6 +59,7 @@ import org.neociclo.capi20.parameter.Reason;
 import org.neociclo.isdn.netty.channel.IsdnChannel;
 import org.neociclo.isdn.netty.channel.IsdnChannelConfig;
 import org.neociclo.netty.statemachine.SimpleStateMachineHandler;
+import org.neociclo.odetteftp.util.TraceHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,7 +68,7 @@ import org.slf4j.LoggerFactory;
  */
 public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
-	private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
+    private static final Charset US_ASCII_CHARSET = Charset.forName("US-ASCII");
 
     private static final Logger LOGGER = LoggerFactory.getLogger(IsdnConnectionHandler.class);
 
@@ -84,13 +85,13 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     @State(PLCI)
     public static final String WF_CONNECT_CONF = "P-0.1 [WF_CONNECT_CONF]";
-    
+
     @State(PLCI)
     public static final String WF_CONNECT_ACTIVE_IND = "P-1.1";
-    
+
     @State(PLCI)
     public static final String WF_DISCONNECT_CONF = "P-5 [WF_DISCONNECT_CONF]";
-    
+
     @State(PLCI)
     public static final String P4_WF_CONNECT_ACTIVE_IND = "P-4 [WF_CONNECT_ACTIVE_IND]";
 
@@ -105,7 +106,7 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     @State(PLCI_ACTIVE)
     public static final String WF_CONNECT_B3_CONF = "N-0.2 [WF_CONNECT_B3_CONF]";
-    
+
     @State(PLCI_ACTIVE)
     public static final String WF_CONNECT_B3_ACTIVE_IND = "N-2 [WF_CONNECT_B3_ACTIVE_IND]";
 
@@ -114,9 +115,11 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     @State(PLCI_ACTIVE)
     public static final String NCCI_ACTIVE = "N-ACT";
-    
+
     @State(PLCI_ACTIVE)
     public static final String WF_DISCONNECT_B3_CONF = "N-4 [WF_DISCONNECT_B3_CONF]";
+
+    private static final int MAX_TRACED_CHAR = 200;
 
     public IsdnConnectionHandler() {
         super();
@@ -133,24 +136,25 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
     }
 
     /**
-     * Client mode method used to hold ChannelEvent#CONNECT_REQUESTED to sendUpstream()
-     * on CONNECT_B3_ACTIVE_IND.
+     * Client mode method used to hold ChannelEvent#CONNECT_REQUESTED to
+     * sendUpstream() on CONNECT_B3_ACTIVE_IND.
      */
     @Transition(on = CONNECT_REQUESTED, in = PLCI)
-    public void retainConnectRequestedEvent(StateContext stateCtx,ChannelHandlerContext ctx,  ChannelStateEvent e) {
+    public void retainConnectRequestedEvent(StateContext stateCtx, ChannelHandlerContext ctx, ChannelStateEvent e) {
         LOGGER.trace("retainConnectRequestedEvent()");
         stateCtx.setAttribute(ISDN_CONNECTED_EVENT_ATTR, e);
 
-        // forward CONNET_REQUESTED to the Sink after event retention 
+        // forward CONNET_REQUESTED to the Sink after event retention
         ctx.sendDownstream(e);
     }
 
     // -------------------------------------------------------------------------
-    // Physical Link control :: 
+    // Physical Link control ::
     // -------------------------------------------------------------------------
 
     @Transition(on = CHANNEL_CONNECTED, in = PLCI_IDLE, next = WF_CONNECT_CONF)
-    public void plciConnectReq(IsdnChannel channel, StateContext stateCtx, ChannelStateEvent e) throws CapiException {
+    public void plciConnectReq(IsdnChannel channel, StateContext stateCtx, ChannelStateEvent e)
+            throws CapiException {
 
         LOGGER.trace("plciConnectReq()");
 
@@ -177,10 +181,8 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     }
 
-    @Transitions ({
-        @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_ACTIVE_IND, next = DO_CONNECT_B3_REQ),
-        @Transition(on = MESSAGE_RECEIVED, in = P4_WF_CONNECT_ACTIVE_IND, next = NCCI_IDLE)        
-    })
+    @Transitions({ @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_ACTIVE_IND, next = DO_CONNECT_B3_REQ),
+            @Transition(on = MESSAGE_RECEIVED, in = P4_WF_CONNECT_ACTIVE_IND, next = NCCI_IDLE) })
     public void plciConnectActiveInd(final IsdnChannel channel, final StateContext stateCtx,
             ConnectActiveInd activeInd, final ChannelHandlerContext ctx) throws CapiException {
 
@@ -195,12 +197,10 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     }
 
-    @Transitions ({
-        @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_CONF, next = PLCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_ACTIVE_IND, next = PLCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = WF_DISCONNECT_CONF, next = PLCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = PLCI_ACTIVE, next = PLCI_IDLE)
-    })
+    @Transitions({ @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_CONF, next = PLCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_ACTIVE_IND, next = PLCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = WF_DISCONNECT_CONF, next = PLCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = PLCI_ACTIVE, next = PLCI_IDLE) })
     public void plciDisconnectInd(final IsdnChannel channel, final StateContext stateCtx, DisconnectInd disconInd)
             throws CapiException {
 
@@ -214,8 +214,8 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
             public void operationComplete(ChannelFuture future) throws Exception {
                 if (!channel.isConnected()) {
                     // retrieve CHANNEL_CONNECTED event and clear attribute
-                    ChannelStateEvent channelConnected = (ChannelStateEvent) stateCtx
-                            .getAttribute(ISDN_CONNECTED_EVENT_ATTR);
+                    ChannelStateEvent channelConnected =
+                            (ChannelStateEvent) stateCtx.getAttribute(ISDN_CONNECTED_EVENT_ATTR);
                     stateCtx.setAttribute(ISDN_CONNECTED_EVENT_ATTR, null);
                     // set FAILED on connectFuture
                     channelConnected.getFuture().setFailure(
@@ -228,7 +228,8 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
     }
 
     @Transition(on = MESSAGE_RECEIVED, in = PLCI_IDLE)
-    public void plciIdleDisconnectInd(final IsdnChannel channel, final StateContext stateCtx, DisconnectInd disconInd) {
+    public void plciIdleDisconnectInd(final IsdnChannel channel, final StateContext stateCtx,
+            DisconnectInd disconInd) {
         LOGGER.trace("plciIdleDisconnectInd() :: ignoring");
     }
 
@@ -245,9 +246,12 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     }
 
-    @Transitions ({
-        @Transition(on = MESSAGE_RECEIVED, in = WF_DISCONNECT_CONF, next = PLCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = NCCI_IDLE, next = PLCI_IDLE) // might happen in server mode        
+    @Transitions({ @Transition(on = MESSAGE_RECEIVED, in = WF_DISCONNECT_CONF, next = PLCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = NCCI_IDLE, next = PLCI_IDLE) // might
+                                                                                 // happen
+                                                                                 // in
+                                                                                 // server
+                                                                                 // mode
     })
     public void plciDisconnectConf(IsdnChannel channel, StateContext stateCtx, DisconnectConf conf,
             ChannelHandlerContext ctx) throws CapiException {
@@ -262,7 +266,8 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
         // forward the ChannelEvent#CLOSE_REQUESTED caught on
         // ncciDisconnectB3Req() to down layers with sendDownstream()
-        ChannelStateEvent closeRequested = (ChannelStateEvent) stateCtx.getAttribute(ISDN_CLOSE_REQUESTED_EVENT_ATTR);
+        ChannelStateEvent closeRequested =
+                (ChannelStateEvent) stateCtx.getAttribute(ISDN_CLOSE_REQUESTED_EVENT_ATTR);
         if (closeRequested != null) {
             stateCtx.setAttribute(ISDN_CLOSE_REQUESTED_EVENT_ATTR, null);
             ctx.sendDownstream(closeRequested);
@@ -278,7 +283,7 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
     /**
      * Triggered on CONNECT_ACTIVE_IND handling.
      */
-    @Transition( on = WRITE_COMPLETE, in = DO_CONNECT_B3_REQ, next = WF_CONNECT_B3_CONF)
+    @Transition(on = WRITE_COMPLETE, in = DO_CONNECT_B3_REQ, next = WF_CONNECT_B3_CONF)
     public void ncciConnectB3Req(IsdnChannel channel, StateContext stateCtx) throws CapiException {
 
         LOGGER.trace("ncciConnectB3Req()");
@@ -336,9 +341,9 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
         writeFuture.addListener(new ChannelFutureListener() {
             public void operationComplete(ChannelFuture future) throws Exception {
 
-                // retrieve CHANNEL_CONNECTED event 
-                ChannelStateEvent channelConnected = (ChannelStateEvent) stateCtx
-                        .getAttribute(ISDN_CONNECTED_EVENT_ATTR);
+                // retrieve CHANNEL_CONNECTED event
+                ChannelStateEvent channelConnected =
+                        (ChannelStateEvent) stateCtx.getAttribute(ISDN_CONNECTED_EVENT_ATTR);
                 stateCtx.setAttribute(ISDN_CONNECTED_EVENT_ATTR, null);
 
                 // mark connectFuture as succesful
@@ -388,12 +393,10 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
     }
 
-    @Transitions ({
-        @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_B3_CONF, next = NCCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_B3_ACTIVE_IND, next = NCCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = WF_DISCONNECT_B3_CONF, next = NCCI_IDLE),
-        @Transition(on = MESSAGE_RECEIVED, in = NCCI_ACTIVE, next = NCCI_IDLE)
-    })
+    @Transitions({ @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_B3_CONF, next = NCCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = WF_CONNECT_B3_ACTIVE_IND, next = NCCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = WF_DISCONNECT_B3_CONF, next = NCCI_IDLE),
+            @Transition(on = MESSAGE_RECEIVED, in = NCCI_ACTIVE, next = NCCI_IDLE) })
     public void ncciDisconnectB3Ind(final IsdnChannel channel, DisconnectB3Ind disconB3Ind) throws CapiException {
 
         LOGGER.trace("ncciDisconnectB3Ind()");
@@ -403,7 +406,8 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
     }
 
     @Transition(on = MESSAGE_RECEIVED, in = NCCI_IDLE)
-    public void ncciIdleDisconnectB3Ind(final IsdnChannel channel, DisconnectB3Ind disconB3Ind) throws CapiException {
+    public void ncciIdleDisconnectB3Ind(final IsdnChannel channel, DisconnectB3Ind disconB3Ind)
+            throws CapiException {
         LOGGER.trace("ncciIdleDisconnectB3Ind() :: ignoring");
     }
 
@@ -412,18 +416,19 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
     // -------------------------------------------------------------------------
 
     @Transition(on = MESSAGE_RECEIVED, in = NCCI_ACTIVE)
-    public void ncciDataB3Ind(IsdnChannel channel, StateContext stateCtx, DataB3Ind dataInd, ChannelHandlerContext ctx, ChannelEvent channelEvent) throws CapiException {
+    public void ncciDataB3Ind(IsdnChannel channel, StateContext stateCtx, DataB3Ind dataInd,
+            ChannelHandlerContext ctx, ChannelEvent channelEvent) throws CapiException {
 
-    	if (LOGGER.isTraceEnabled()) {
-	        try {
-	            LOGGER.trace("ncciDataB3Ind() :: data = {}", new String(dataInd.getB3Data(), US_ASCII_CHARSET));
-	        } catch (Throwable t) {
-	            LOGGER.trace("ncciDataB3Ind()");
-	        }
-    	}
+        if (LOGGER.isTraceEnabled()) {
+            try {
+                traceMessage(dataInd.getB3Data());
+            } catch (Throwable t) {
+                LOGGER.trace("trace ncciDataB3Ind() failed");
+            }
+        }
 
         CapiMessage dataResp = replyDataB3Resp(dataInd);
-//        channel.write(dataResp);
+        // channel.write(dataResp);
         write(ctx, channelEvent.getFuture(), dataResp);
 
         ChannelBuffer buf = (ChannelBuffer) stateCtx.getAttribute(ISDN_RECEIVE_BUF_ATTR);
@@ -437,9 +442,9 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
 
         if (dataInd.hasFlag(Flag.MORE_DATA_BIT)) {
             // accumulate buffer on session state context
-        	if (LOGGER.isTraceEnabled()) {
-	            LOGGER.trace("ncciDataB3Ind() :: accumulating data buffer... {}", dataInd);
-        	}
+            if (LOGGER.isTraceEnabled()) {
+                LOGGER.trace("ncciDataB3Ind() :: accumulating data buffer... {}", dataInd);
+            }
             stateCtx.setAttribute(ISDN_RECEIVE_BUF_ATTR, buf);
         } else {
             // send the complete DATA to upper layer
@@ -447,10 +452,11 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
             stateCtx.setAttribute(ISDN_RECEIVE_BUF_ATTR, null);
         }
 
-
     }
-    @Transition (on = WRITE_REQUESTED, in = NCCI_ACTIVE)
-    public void ncciDataB3Req(IsdnChannel channel, ChannelBuffer message, ChannelHandlerContext ctx, ChannelEvent channelEvent) throws CapiException {
+
+    @Transition(on = WRITE_REQUESTED, in = NCCI_ACTIVE)
+    public void ncciDataB3Req(IsdnChannel channel, ChannelBuffer message, ChannelHandlerContext ctx,
+            ChannelEvent channelEvent) throws CapiException {
 
         if (message == ChannelBuffers.EMPTY_BUFFER) {
             // send flush() signal downstream
@@ -460,53 +466,123 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
         }
 
         if (LOGGER.isTraceEnabled()) {
-	        try {
-	            LOGGER.trace("ncciDataB3Req() :: data = {}", message.duplicate().toString(US_ASCII_CHARSET));
-	        } catch (Throwable t) {
-	            LOGGER.trace("ncciDataB3Req()");
-	        }
+            try {
+                traceMessage(message.duplicate().array());
+            } catch (Throwable t) {
+                LOGGER.trace("ncciDataB3Req()");
+            }
         }
 
         CapiMessage dataReq = createDataB3Req(channel, message);
-//        channel.write(dataReq);
+        // channel.write(dataReq);
         write(ctx, channelEvent.getFuture(), dataReq);
-        
+
+    }
+
+    /**
+     * Trace message.
+     *
+     * @param message the message
+     */
+    private void traceMessage(byte[] messageBytes) {
+        int i = 0;
+        StringBuilder hexStringBuilder = new StringBuilder();
+        hexStringBuilder.append('|');
+        for (byte b : messageBytes) {
+            hexStringBuilder.append(' ');
+            hexStringBuilder.append(TraceHelper.byteToHex(b));
+            hexStringBuilder.append('|');
+            i++;
+            if (i > MAX_TRACED_CHAR) {
+                hexStringBuilder.append("...");
+                break;
+            }
+        }
+        StringBuilder asciStringBuilder = new StringBuilder();
+        asciStringBuilder.append('|');
+        int a=0;
+        for (byte character : messageBytes) {
+            asciStringBuilder.append(' ');
+            asciStringBuilder.append(' ');
+            asciStringBuilder.append(new String(new byte[] { character }, US_ASCII_CHARSET));
+            asciStringBuilder.append('|');
+            if (a++ > MAX_TRACED_CHAR) {
+                asciStringBuilder.append("...");
+                break;
+            }
+        }
+        StringBuilder indexStringBuilder = new StringBuilder();
+        indexStringBuilder.append('|');
+        for (int j = 0; j < i; j++) {
+            if (j < 10) {
+                indexStringBuilder.append(' ');
+                indexStringBuilder.append(' ');
+            }
+            if (j < 100 && j >= 10) {
+                indexStringBuilder.append(' ');
+            }
+            indexStringBuilder.append(j);
+            indexStringBuilder.append('|');
+        }
+        LOGGER.trace("ncciDataB3Req() | data HEX : = {}", hexStringBuilder.toString());
+        LOGGER.trace("ncciDataB3Req() | data ASCI: = {}", asciStringBuilder.toString());
+        LOGGER.trace("ncciDataB3Req() | ByteIDX  : = {}", indexStringBuilder.toString());
     }
 
     @Transition(on = MESSAGE_RECEIVED, in = NCCI_ACTIVE)
     public void ncciDataB3Conf(IsdnChannel channel, DataB3Conf dataConf) throws CapiException {
 
-        LOGGER.trace("ncciDataB3Conf()");
+        Info info = dataConf.getInfo();
+        if (info != null) {
+            if (info.isClassZero()) {
+                LOGGER.debug("ncciDataB3Conf() :: {}", info.toString());
+            } else if (info.isClassTen()) {
+                LOGGER.error("ncciDataB3Conf() (Error information concerning CAPI_REGISTER) :: {}",
+                        info.toString());
+            } else if (info.isClassEleven()) {
+                LOGGER.error("ncciDataB3Conf() (Error information concerning message exchange functions) :: {}",
+                        info.toString());
+            } else if (info.isClassTwenty()) {
+                LOGGER.error("ncciDataB3Conf() (Error information concerning resource/coding problems) :: {}",
+                        info.toString());
+            } else if (info.isClassThirty()) {
+                LOGGER.error("ncciDataB3Conf() (Error information concerning requested services) :: {}",
+                        info.toString());
+            } else {
+                LOGGER.trace("ncciDataB3Conf() :: {}", info.toString());
+            }
+        }
 
-        // TODO process the dataCon.getInfo() accordingly
     }
-
 
     // -------------------------------------------------------------------------
     // Flow control
     // -------------------------------------------------------------------------
 
-    @Transition(on = MESSAGE_RECEIVED, in = NCCI_ACTIVE, next = WF_RESET_B3_CONF) //, next = WF_DISCONNECT_B3_CONF)
-    public void ncciResetB3Ind(final IsdnChannel channel, StateContext stateCtx, ResetB3Ind resetInd) throws CapiException {
+    @Transition(on = MESSAGE_RECEIVED, in = NCCI_ACTIVE, next = WF_RESET_B3_CONF)
+    // , next = WF_DISCONNECT_B3_CONF)
+    public void ncciResetB3Ind(final IsdnChannel channel, StateContext stateCtx, ResetB3Ind resetInd)
+            throws CapiException {
 
         LOGGER.trace("ncciResetB3Ind()");
 
         stateCtx.setAttribute(ISDN_RECEIVE_BUF_ATTR, null);
 
         CapiMessage resetResp = createResetB3Resp(channel);
-//        ChannelFuture resetRespFuture = channel.write(resetResp);
+        // ChannelFuture resetRespFuture = channel.write(resetResp);
         channel.write(resetResp);
 
-//        CapiMessage resetReq = createResetB3Req(channel);
-//        channel.write(resetReq);
+        // CapiMessage resetReq = createResetB3Req(channel);
+        // channel.write(resetReq);
 
-//        resetRespFuture.addListener(new ChannelFutureListener() {
-//            public void operationComplete(ChannelFuture future) throws Exception {
-//                // send a subsequent DISCONNECT_B3_REQ
-//                CapiMessage disconnectB3Req = createDisconnectB3Req(channel);
-//                channel.write(disconnectB3Req);
-//            }
-//        });
+        // resetRespFuture.addListener(new ChannelFutureListener() {
+        // public void operationComplete(ChannelFuture future) throws Exception
+        // {
+        // // send a subsequent DISCONNECT_B3_REQ
+        // CapiMessage disconnectB3Req = createDisconnectB3Req(channel);
+        // channel.write(disconnectB3Req);
+        // }
+        // });
 
     }
 
@@ -524,14 +600,16 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
         LOGGER.error("Unexpected error.", event.getCause());
         if (!channel.isConnected()) {
             // retrieve CHANNEL_CONNECTED event and clear attribute
-            ChannelStateEvent channelConnected = (ChannelStateEvent) stateCtx.getAttribute(ISDN_CONNECTED_EVENT_ATTR);
+            ChannelStateEvent channelConnected =
+                    (ChannelStateEvent) stateCtx.getAttribute(ISDN_CONNECTED_EVENT_ATTR);
             stateCtx.setAttribute(ISDN_CONNECTED_EVENT_ATTR, null);
             try {
-	            // set FAILED on connectFuture 
-	            channelConnected.getFuture().setFailure(new Exception(format("ERROR - %s", event.getCause().getMessage())));
+                // set FAILED on connectFuture
+                channelConnected.getFuture().setFailure(
+                        new Exception(format("ERROR - %s", event.getCause().getMessage())));
             } catch (Throwable t) {
-            	// avoid NPE when connection is already closed – really doesn't
-            	// matter finding a new error – ignore
+                // avoid NPE when connection is already closed – really doesn't
+                // matter finding a new error – ignore
             }
         } else {
             ctx.sendUpstream(event);
@@ -543,7 +621,8 @@ public class IsdnConnectionHandler extends SimpleStateMachineHandler {
      * Delegate unhandled events to Netty pipeline in the correct direction.
      */
     @Transition(on = ANY, in = PLCI)
-    public void unhandledEvent(Event smEvent, ChannelHandlerContext ctx, ChannelEvent channelEvent) throws Exception {
+    public void unhandledEvent(Event smEvent, ChannelHandlerContext ctx, ChannelEvent channelEvent)
+            throws Exception {
 
         String name = (String) smEvent.getId();
         LOGGER.trace("UNHANDLED :: on = {} , in = {}, event = {} ", new Object[] { name,
